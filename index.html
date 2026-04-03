@@ -2,176 +2,211 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DogWalker - Cloud App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MaxWalker</title>
+    
     <link rel="icon" href="icon.png" type="image/png">
     <link rel="apple-touch-icon" href="icon.png">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f0f9ff; color: #1e293b; }
-        .card { background: white; border-radius: 24px; box-shadow: 0 4px 20px -2px rgba(186, 230, 253, 0.5); }
+        .card { background: white; border-radius: 20px; box-shadow: 0 4px 15px -2px rgba(186, 230, 253, 0.4); }
         .btn-primary { background-color: #38bdf8; transition: all 0.2s ease; color: white; font-weight: 600; }
         .btn-primary:hover { background-color: #0ea5e9; transform: translateY(-1px); }
-        .tab-active { border-bottom: 3px solid #38bdf8; color: #0ea5e9; font-weight: 600; }
+        .tab-active { border-bottom: 3px solid #38bdf8; color: #0ea5e9; font-weight: 700; }
         .hidden { display: none !important; }
         input:focus, select:focus { border-color: #7dd3fc; ring: 3px; ring-color: #e0f2fe; outline: none; }
         .loader { border-top-color: #38bdf8; animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Cronómetro fuente monoespaciada */
+        .font-timer { font-variant-numeric: tabular-nums; letter-spacing: -1px; }
+        input[type="time"] { -webkit-appearance: none; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="min-h-screen bg-slate-50">
 
     <!-- OVERLAY CARGA -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-6 text-center">
-        <div id="loader-spinner" class="loader w-12 h-12 border-4 border-slate-100 rounded-full mb-4"></div>
-        <p id="loader-text" class="text-sky-500 font-medium text-sm">Conectando a tu nube...</p>
+        <div id="loader-spinner" class="loader w-10 h-10 border-4 border-slate-100 rounded-full mb-4"></div>
+        <p id="loader-text" class="text-sky-500 font-medium text-xs tracking-widest uppercase">Iniciando...</p>
         
-        <!-- MENSAJES DE ERROR VISIBLES -->
-        <div id="config-error" class="hidden flex flex-col items-center animate-bounce">
-            <span class="text-4xl mb-2">⚠️</span>
-            <h3 class="text-red-500 font-bold text-lg">Falta Configuración</h3>
-            <p class="text-slate-500 text-xs mt-2 max-w-xs mx-auto">
-                No has puesto tus llaves de Firebase.<br>
-                Abre este archivo con el Bloc de Notas, baja hasta el final y busca: <br>
-                <code class="bg-slate-100 p-1 rounded mt-1 block font-mono text-slate-700">const firebaseConfig = { ... }</code>
-                Sustituye los valores de ejemplo por los tuyos.
-            </p>
-        </div>
-
-        <div id="connection-error" class="hidden flex flex-col items-center">
-            <span class="text-4xl mb-2">📡</span>
-            <h3 class="text-red-500 font-bold text-lg">Error de Conexión</h3>
-            <p id="connection-error-msg" class="text-slate-500 text-xs mt-2 max-w-xs mx-auto">
-                No se pudo conectar a la base de datos.<br>Revisa tu conexión o las reglas de Firebase.
-            </p>
+        <div id="connection-error" class="hidden flex flex-col items-center mt-4">
+            <span class="text-3xl mb-2">📡</span>
+            <p id="connection-error-msg" class="text-red-400 text-xs max-w-xs mx-auto">Error de conexión.</p>
         </div>
     </div>
 
     <!-- MODAL CONFIRMACIÓN -->
-    <div id="custom-modal" class="fixed inset-0 bg-slate-900/20 backdrop-blur-sm z-50 flex items-center justify-center px-4 hidden">
-        <div class="card p-6 w-full max-w-sm text-center bg-white shadow-2xl">
+    <div id="custom-modal" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center px-6 hidden">
+        <div class="card p-6 w-full max-w-xs text-center bg-white shadow-2xl transform transition-all scale-100">
             <h3 id="modal-title" class="font-bold text-lg text-slate-800 mb-2">Confirmar</h3>
-            <p id="modal-msg" class="text-sm text-slate-500 mb-6"></p>
+            <p id="modal-msg" class="text-sm text-slate-500 mb-6 leading-tight"></p>
             <div class="flex gap-3 justify-center">
-                <button id="btn-modal-cancel" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50">Cancelar</button>
-                <button id="btn-modal-confirm" class="flex-1 py-3 rounded-xl bg-red-400 text-white font-bold text-xs hover:bg-red-500">Confirmar</button>
+                <button id="btn-modal-cancel" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-500 font-bold text-xs">Cancelar</button>
+                <button id="btn-modal-confirm" class="flex-1 py-3 rounded-xl bg-red-400 text-white font-bold text-xs shadow-lg shadow-red-200">Confirmar</button>
             </div>
         </div>
     </div>
 
     <!-- SETUP INICIAL -->
-    <div id="setup-screen" class="min-h-screen flex items-center justify-center px-4 hidden">
-        <div class="card p-8 w-full max-w-sm border border-sky-100">
-            <h1 class="text-2xl font-bold text-center mb-2 text-sky-900">Bienvenido</h1>
-            <p class="text-center text-slate-400 mb-6 text-xs">Crea la primera cuenta de administrador para empezar.</p>
+    <div id="setup-screen" class="min-h-screen flex items-center justify-center px-6 hidden">
+        <div class="card p-6 w-full max-w-sm border border-sky-50">
+            <h1 class="text-xl font-bold text-center mb-2 text-sky-900">Bienvenido</h1>
+            <p class="text-center text-slate-400 mb-6 text-xs">Crea la primera cuenta de administrador.</p>
             <form id="setupForm" class="space-y-4">
-                <input type="text" id="setupUser" placeholder="Usuario" required class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/30">
-                <input type="password" id="setupPass" placeholder="Contraseña" required class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/30">
-                <button type="submit" class="w-full btn-primary py-4 rounded-xl shadow-lg">Crear Cuenta</button>
+                <input type="text" id="setupUser" placeholder="Usuario" required class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/20 text-sm">
+                <input type="password" id="setupPass" placeholder="Contraseña" required class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/20 text-sm">
+                <button type="submit" class="w-full btn-primary py-3 rounded-xl shadow-lg shadow-sky-100 text-sm">Crear Cuenta</button>
             </form>
         </div>
     </div>
 
     <!-- LOGIN -->
-    <div id="login-screen" class="min-h-screen flex items-center justify-center px-4 hidden">
-        <div class="card p-8 w-full max-w-sm border border-sky-50">
-            <div class="text-center mb-6 text-5xl">🦮</div>
-            <h1 class="text-3xl font-bold text-center mb-1 text-sky-900">DogWalker</h1>
-            <p class="text-center text-sky-400 mb-8 text-sm font-medium">Sincronizado en la Nube</p>
-            <form id="loginForm" class="space-y-4">
-                <input type="text" id="loginUser" placeholder="Usuario" required class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/20">
-                <input type="password" id="loginPass" placeholder="Contraseña" class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/20">
-                <button type="submit" class="w-full btn-primary py-4 rounded-2xl shadow-xl mt-2">Entrar</button>
+    <div id="login-screen" class="min-h-screen flex items-center justify-center px-6 hidden">
+        <div class="card p-6 w-full max-w-sm border border-sky-50">
+            <div class="text-center mb-6">
+                <!-- LOGO PERSONALIZADO: Busca icon.png. Si falla, pone foto de prueba -->
+                <img src="icon.png" alt="Logo Perro" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=200&q=80';" class="w-24 h-24 mx-auto object-cover rounded-full shadow-lg border-4 border-sky-50">
+            </div>
+            <h1 class="text-2xl font-bold text-center mb-1 text-sky-900">MaxWalker</h1>
+            <p class="text-center text-sky-400 mb-6 text-xs font-medium uppercase tracking-wider">Gestión de Paseos</p>
+            <form id="loginForm" class="space-y-3">
+                <input type="text" id="loginUser" placeholder="Usuario" required class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/20 text-sm font-medium text-slate-700 placeholder:text-slate-400">
+                <input type="password" id="loginPass" placeholder="Contraseña" class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/20 text-sm font-medium text-slate-700 placeholder:text-slate-400">
+                <button type="submit" class="w-full btn-primary py-3.5 rounded-xl shadow-lg shadow-sky-100 mt-2 text-sm">Entrar</button>
             </form>
-            <div id="loginError" class="mt-4 text-red-400 text-center text-xs hidden font-bold">⚠️ Credenciales incorrectas</div>
+            <div id="loginError" class="mt-4 text-red-400 text-center text-xs hidden font-bold animate-pulse">⚠️ Credenciales incorrectas</div>
         </div>
     </div>
 
     <!-- MODAL CONFIGURAR CONTRASEÑA -->
-    <div id="password-setup-modal" class="fixed inset-0 bg-sky-900/40 backdrop-blur-sm z-50 flex items-center justify-center px-4 hidden">
-        <div class="card p-8 w-full max-w-sm text-center">
-            <h3 class="font-bold text-xl text-sky-900 mb-2">Hola de nuevo</h3>
-            <p class="text-sm text-slate-500 mb-6">Tu contraseña ha sido restablecida. Por favor crea una nueva.</p>
-            <input type="password" id="newAccountPass" placeholder="Nueva contraseña" class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/20 mb-4">
-            <button id="savePassBtn" class="w-full bg-sky-500 text-white py-4 rounded-2xl font-bold">Guardar y Entrar</button>
+    <div id="password-setup-modal" class="fixed inset-0 bg-sky-900/40 backdrop-blur-sm z-50 flex items-center justify-center px-6 hidden">
+        <div class="card p-6 w-full max-w-sm text-center">
+            <h3 class="font-bold text-lg text-sky-900 mb-2">Actualizar Clave</h3>
+            <p class="text-xs text-slate-500 mb-6">Tu cuenta requiere una nueva contraseña.</p>
+            <input type="password" id="newAccountPass" placeholder="Nueva contraseña" class="w-full p-3 border border-sky-100 rounded-xl bg-sky-50/20 mb-4 text-sm">
+            <button id="savePassBtn" class="w-full bg-sky-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg">Guardar</button>
         </div>
     </div>
 
     <!-- APP PRINCIPAL -->
-    <div id="app-content" class="hidden">
-        <nav class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-10 border-b border-sky-50">
-            <div class="max-w-md mx-auto px-4 py-4 flex justify-around text-[10px] uppercase tracking-tighter font-bold">
-                <button id="tab-register" class="pb-2 tab-active" data-tab="register">Registrar</button>
-                <button id="tab-history" class="pb-2 text-slate-400" data-tab="history">Historial</button>
-                <button id="tab-stats" class="pb-2 text-slate-400" data-tab="stats">Resumen</button>
-                <button id="tab-admin" class="pb-2 text-slate-400 hidden" data-tab="admin">Admin</button>
-                <button id="logoutBtn" class="pb-2 text-red-300">Salir</button>
+    <div id="app-content" class="hidden flex flex-col h-screen">
+        <nav class="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-10 border-b border-sky-50 shrink-0">
+            <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center text-[10px] font-bold uppercase tracking-wide">
+                <div class="flex gap-4 sm:gap-6">
+                    <button id="tab-register" class="pb-1 tab-active" data-tab="register">Registrar</button>
+                    <button id="tab-history" class="pb-1 text-slate-400" data-tab="history">Historial</button>
+                    <button id="tab-stats" class="pb-1 text-slate-400" data-tab="stats">Resumen</button>
+                    <button id="tab-admin" class="pb-1 text-slate-400 hidden" data-tab="admin">Admin</button>
+                </div>
+                <button id="logoutBtn" class="text-red-300 hover:text-red-400">Salir</button>
             </div>
         </nav>
 
-        <main class="max-w-md mx-auto px-4 mt-6 pb-24">
+        <main class="flex-1 overflow-y-auto max-w-md mx-auto w-full px-4 pt-4 pb-20">
             <!-- SECCIÓN REGISTRO -->
-            <section id="section-register" class="space-y-6">
-                <div class="card p-6 border border-sky-50">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 id="formTitle" class="text-lg font-bold text-sky-900">Nuevo Paseo</h2>
-                        <button id="cancelEditBtn" class="hidden text-[10px] text-red-400 font-bold uppercase hover:bg-red-50 p-2 rounded-lg">Cancelar Edición</button>
+            <section id="section-register" class="space-y-4">
+                <div class="card p-5 border border-sky-50">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 id="formTitle" class="text-base font-bold text-sky-900 flex items-center gap-2">
+                            <span>🐾</span> Paseo Activo
+                        </h2>
+                        <button id="cancelEditBtn" class="hidden text-[10px] bg-red-50 text-red-400 font-bold uppercase px-2 py-1 rounded-lg">Cancelar</button>
                     </div>
-                    <form id="walkForm" class="space-y-5">
+                    
+                    <div>
+                        <label class="block text-[10px] uppercase font-bold text-sky-400 mb-1.5 ml-1">¿Quién pasea?</label>
+                        <div class="relative">
+                            <select id="walkerSelect" class="w-full p-3.5 border border-sky-100 rounded-xl bg-sky-50/30 font-semibold text-slate-700 text-sm appearance-none outline-none focus:ring-2 focus:ring-sky-100"></select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-sky-400">
+                                <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MODO CRONÓMETRO GIGANTE -->
+                    <div id="view-timer" class="mt-8 mb-6 flex flex-col items-center">
+                        <button id="btn-circle-timer" class="relative w-48 h-48 rounded-full bg-gradient-to-tr from-sky-400 to-sky-300 text-white shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)] flex flex-col items-center justify-center transition-transform transform hover:scale-105 active:scale-95 outline-none">
+                            <span id="circle-icon" class="text-4xl mb-1">▶️</span>
+                            <span id="circle-time" class="text-5xl font-black font-timer hidden tracking-tighter drop-shadow-md">00:00</span>
+                            <span id="circle-text" class="font-bold tracking-widest uppercase text-xs mt-1 opacity-90">Iniciar</span>
+                        </button>
+                    </div>
+
+                    <!-- BOTÓN TOGGLE MANUAL (Solo para Admins) -->
+                    <div id="admin-manual-toggle" class="text-center mt-2 mb-4 hidden">
+                        <button id="btn-toggle-mode" type="button" class="text-[10px] font-bold text-slate-400 uppercase hover:text-sky-500 underline decoration-slate-200 underline-offset-4">
+                            Añadir manualmente
+                        </button>
+                    </div>
+
+                    <!-- MODO EDICIÓN / MANUAL (Oculto por defecto) -->
+                    <form id="walkForm" class="hidden mt-4 space-y-4">
                         <input type="hidden" id="editWalkId">
-                        <div>
-                            <label class="block text-[10px] uppercase font-black text-sky-300 mb-2">Paseador</label>
-                            <select id="walkerSelect" class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/30 font-bold text-sky-800"></select>
-                        </div>
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-2 gap-3">
                             <div>
-                                <label class="block text-[10px] uppercase font-black text-sky-300 mb-2">Salida</label>
-                                <input type="time" id="startTime" required class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/30 font-bold text-sky-800">
+                                <label class="block text-[10px] uppercase font-bold text-sky-400 mb-1.5 ml-1">Salida</label>
+                                <input type="time" id="startTime" class="w-full p-3.5 border border-sky-100 rounded-xl bg-sky-50/30 font-bold text-slate-700 text-sm text-center outline-none focus:ring-2 focus:ring-sky-100">
                             </div>
                             <div>
-                                <label class="block text-[10px] uppercase font-black text-sky-300 mb-2">Llegada</label>
-                                <input type="time" id="endTime" required class="w-full p-4 border border-sky-100 rounded-2xl bg-sky-50/30 font-bold text-sky-800">
+                                <label class="block text-[10px] uppercase font-bold text-sky-400 mb-1.5 ml-1">Llegada</label>
+                                <input type="time" id="endTime" class="w-full p-3.5 border border-sky-100 rounded-xl bg-sky-50/30 font-bold text-slate-700 text-sm text-center outline-none focus:ring-2 focus:ring-sky-100">
                             </div>
                         </div>
-                        <button type="submit" id="submitWalkBtn" class="w-full btn-primary py-5 rounded-2xl shadow-xl text-sm">Guardar en la Nube</button>
+                        <button type="submit" id="submitWalkBtn" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 rounded-xl shadow-lg text-sm flex justify-center items-center gap-2">
+                            <span>🔄</span> Actualizar Cambios
+                        </button>
                     </form>
+                </div>
+                
+                <div class="text-center text-[10px] text-slate-300 font-medium">
+                    Gestión de paseos de Max 🐾
                 </div>
             </section>
 
             <!-- SECCIÓN HISTORIAL -->
-            <section id="section-history" class="hidden space-y-4">
-                <div id="historyList" class="space-y-4"></div>
+            <section id="section-history" class="hidden space-y-3">
+                <div id="historyList" class="space-y-3 pb-4"></div>
             </section>
 
             <!-- SECCIÓN STATS -->
-            <section id="section-stats" class="hidden space-y-6">
-                <div class="card p-6">
-                    <h3 class="text-xs font-bold text-sky-400 uppercase mb-4 text-center">Paseos Realizados</h3>
-                    <canvas id="chartWalks"></canvas>
+            <section id="section-stats" class="hidden space-y-4">
+                <div class="card p-4">
+                    <h3 class="text-[10px] font-bold text-sky-400 uppercase mb-3 text-center tracking-widest">Paseos Realizados</h3>
+                    <div class="h-48">
+                        <canvas id="chartWalks"></canvas>
+                    </div>
                 </div>
-                <div class="card p-6">
-                    <h3 class="text-xs font-bold text-sky-400 uppercase mb-4 text-center">Tiempo Total</h3>
-                    <canvas id="chartTime"></canvas>
+                <div class="card p-4">
+                    <h3 class="text-[10px] font-bold text-sky-400 uppercase mb-3 text-center tracking-widest">Tiempo Total</h3>
+                    <div class="h-48">
+                        <canvas id="chartTime"></canvas>
+                    </div>
                 </div>
             </section>
 
             <!-- SECCIÓN ADMIN -->
-            <section id="section-admin" class="hidden space-y-6">
-                <div class="card p-6">
-                    <h2 class="text-lg font-bold mb-4 text-sky-900">Equipo</h2>
-                    <form id="userForm" class="bg-sky-50/50 p-5 rounded-2xl mb-6 space-y-3 border border-sky-100">
-                        <input type="text" id="userName" placeholder="Nombre" required class="w-full p-3 rounded-xl border-white bg-white font-medium">
-                        <input type="password" id="userPass" placeholder="Clave (Opcional)" class="w-full p-3 rounded-xl border-white bg-white font-medium">
-                        <div class="flex items-center gap-2 px-1">
-                            <input type="checkbox" id="userIsAdmin" class="w-4 h-4 text-sky-500 rounded border-sky-200">
-                            <label for="userIsAdmin" class="text-xs font-bold text-slate-600">Es Administrador</label>
+            <section id="section-admin" class="hidden space-y-4">
+                <div class="card p-5 border border-sky-50">
+                    <h2 class="text-sm font-bold mb-4 text-sky-900 uppercase tracking-wide">Nuevo Usuario</h2>
+                    <form id="userForm" class="space-y-3">
+                        <div class="bg-sky-50/50 p-3 rounded-xl border border-sky-100 space-y-2">
+                            <input type="text" id="userName" placeholder="Nombre" required class="w-full p-2 rounded-lg border-white bg-white text-xs font-medium focus:ring-0">
+                            <input type="password" id="userPass" placeholder="Clave (Opcional)" class="w-full p-2 rounded-lg border-white bg-white text-xs font-medium focus:ring-0">
+                            <div class="flex items-center gap-2 pt-1">
+                                <input type="checkbox" id="userIsAdmin" class="w-4 h-4 text-sky-500 rounded border-sky-200 bg-white">
+                                <label for="userIsAdmin" class="text-[10px] font-bold text-slate-500 uppercase">Es Administrador</label>
+                            </div>
                         </div>
-                        <button type="submit" class="w-full bg-sky-900 text-white py-3 rounded-xl text-xs font-bold shadow-lg">Añadir Usuario</button>
+                        <button type="submit" class="w-full bg-sky-500 text-white py-3 rounded-xl text-xs font-bold shadow-md hover:bg-sky-600">Añadir Usuario</button>
                     </form>
-                    <div id="usersList" class="space-y-3"></div>
                 </div>
+                
+                <div class="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">Usuarios Activos</div>
+                <div id="usersList" class="space-y-2 pb-4"></div>
             </section>
         </main>
     </div>
@@ -179,41 +214,35 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, collection, onSnapshot, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // ==========================================
-        // --- PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE ---
-        // ==========================================
-        
+        // =========================================================================
+        // 🔴 PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE 🔴
+        // Borra los datos falsos que hay aquí y pega los tuyos de la consola de Firebase.
+        // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAyLqdIbmEZeLk6hFIKXVWHhgA37vgX9sw",
             authDomain: "dogwalker-pl.firebaseapp.com",
             projectId: "dogwalker-pl",
             storageBucket: "dogwalker-pl.firebasestorage.app",
             messagingSenderId: "531303785074",
-            appId: "1:531303785074:web:ece0891cfebc06ac8218eb"
+            appId: "1:531303785074:web:ece0891cfebc06ac8218eb",
+            measurementId: "G-MJPHBFNK54"
         };
+        // =========================================================================
 
-        // ==========================================
-        
-        // Inicialización segura con manejo de errores visual
         let app, auth, db;
         try {
-            if (!firebaseConfig || firebaseConfig.apiKey === "TU_API_KEY_AQUI") {
-                throw new Error("Configuración no establecida");
-            }
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
         } catch (e) {
-            console.error("Falta configuración:", e);
-            // Ocultamos el spinner pero DEJAMOS el overlay para mostrar el error
-            document.getElementById('loader-spinner').classList.add('hidden');
-            document.getElementById('loader-text').classList.add('hidden');
-            document.getElementById('config-error').classList.remove('hidden');
+            console.error("Error iniciando Firebase:", e);
+            document.getElementById('loader-text').innerText = "Error de configuración";
         }
 
-        const appId = 'dog-walker-production';
+        // Esta es la ruta principal en tu base de datos donde se guardará todo
+        const dbAppId = 'dogwalker-pl-main-db';
 
         let currentUser = null;
         let allUsers = [];
@@ -224,16 +253,138 @@
         let unsubWalks = null;
         let pendingAction = null; 
 
-        // --- AUTH & SYNC ---
+        // --- CRONÓMETRO CIRCULAR LÓGICA ---
+        let timerInterval = null;
+        const btnCircleTimer = document.getElementById('btn-circle-timer');
+        const circleIcon = document.getElementById('circle-icon');
+        const circleTime = document.getElementById('circle-time');
+        const circleText = document.getElementById('circle-text');
+        const viewTimer = document.getElementById('view-timer');
+        const viewManual = document.getElementById('walkForm');
+        
+        const btnToggleMode = document.getElementById('btn-toggle-mode');
+        const adminManualToggle = document.getElementById('admin-manual-toggle');
+        let isManualMode = false;
+
+        function formatTimeJS(date) {
+            return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
+        }
+
+        function updateTimerUI() {
+            const startMs = parseInt(localStorage.getItem('dw_active_walk_start'));
+            if (!startMs) {
+                // Estado Inactivo
+                circleIcon.classList.remove('hidden');
+                circleTime.classList.add('hidden');
+                circleText.innerText = "Iniciar";
+                
+                btnCircleTimer.classList.remove('from-red-400', 'to-red-300', 'shadow-[0_10px_40px_-10px_rgba(248,113,113,0.6)]', 'animate-pulse');
+                btnCircleTimer.classList.add('from-sky-400', 'to-sky-300', 'shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]');
+                
+                document.getElementById('walkerSelect').disabled = false;
+                clearInterval(timerInterval);
+                return;
+            }
+
+            // Estado Activo (Calculando tiempo)
+            const diff = Date.now() - startMs;
+            const totalSeconds = Math.floor(diff / 1000);
+            const mins = Math.floor(totalSeconds / 60);
+            const secs = totalSeconds % 60;
+            
+            circleTime.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            
+            circleIcon.classList.add('hidden');
+            circleTime.classList.remove('hidden');
+            circleText.innerText = "Finalizar";
+
+            btnCircleTimer.classList.remove('from-sky-400', 'to-sky-300', 'shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]');
+            btnCircleTimer.classList.add('from-red-400', 'to-red-300', 'shadow-[0_10px_40px_-10px_rgba(248,113,113,0.6)]', 'animate-pulse');
+            
+            document.getElementById('walkerSelect').disabled = true;
+        }
+
+        btnCircleTimer.onclick = async () => {
+            const startMs = parseInt(localStorage.getItem('dw_active_walk_start'));
+            if (!startMs) {
+                // INICIAR PASEO
+                localStorage.setItem('dw_active_walk_start', Date.now().toString());
+                localStorage.setItem('dw_active_walker', document.getElementById('walkerSelect').value);
+                timerInterval = setInterval(updateTimerUI, 1000);
+                updateTimerUI();
+            } else {
+                // FINALIZAR Y GUARDAR
+                const endMs = Date.now();
+                const walker = localStorage.getItem('dw_active_walker') || document.getElementById('walkerSelect').value;
+                
+                const startDate = new Date(startMs);
+                const endDate = new Date(endMs);
+                
+                let durationMins = Math.round((endMs - startMs) / 60000);
+                if (durationMins < 1) durationMins = 1; // Mínimo 1 minuto
+
+                const walkData = {
+                    walker: walker,
+                    start: formatTimeJS(startDate),
+                    end: formatTimeJS(endDate),
+                    duration: durationMins,
+                    date: startDate.toLocaleDateString('es-ES'),
+                    timestamp: endMs,
+                    recordedBy: currentUser.name
+                };
+
+                // Limpiar Cronómetro Local
+                localStorage.removeItem('dw_active_walk_start');
+                localStorage.removeItem('dw_active_walker');
+                clearInterval(timerInterval);
+                updateTimerUI();
+
+                // Subir a Nube
+                try {
+                    const id = crypto.randomUUID();
+                    await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id), walkData);
+                    showTab('history');
+                } catch (err) {
+                    showModal("Error", "No se pudo guardar el paseo: " + err.message, null);
+                }
+            }
+        };
+
+        // EVENTO DEL BOTÓN AÑADIR MANUALMENTE
+        btnToggleMode.onclick = () => {
+            isManualMode = !isManualMode;
+            if (isManualMode) {
+                viewTimer.classList.add('hidden');
+                viewManual.classList.remove('hidden');
+                btnToggleMode.innerText = "Usar cronómetro";
+                document.getElementById('formTitle').innerHTML = `<span>📝</span> Añadir Manual`;
+                document.getElementById('submitWalkBtn').innerHTML = `<span>💾</span> Guardar Manual`;
+                document.getElementById('editWalkId').value = ""; // Limpiar para que sea un nuevo registro
+                document.getElementById('cancelEditBtn').classList.add('hidden');
+                
+                // Poner la hora actual por defecto para comodidad
+                const now = new Date();
+                const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+                document.getElementById('startTime').value = timeStr;
+                document.getElementById('endTime').value = timeStr;
+            } else {
+                viewTimer.classList.remove('hidden');
+                viewManual.classList.add('hidden');
+                btnToggleMode.innerText = "Añadir manualmente";
+                document.getElementById('formTitle').innerHTML = `<span>🐾</span> Paseo Activo`;
+            }
+        };
+
+        // --- AUTH & PERSISTENCIA DE SESIÓN ---
 
         const initAuth = async () => {
-            if (!auth) return; // Si no hay auth configurado, no hacemos nada (el error ya se muestra)
+            if (!auth) return;
             try {
                 await signInAnonymously(auth);
             } catch(e) {
                 console.error("Auth Error:", e);
                 document.getElementById('loader-spinner').classList.add('hidden');
-                document.getElementById('loader-text').classList.add('hidden');
+                document.getElementById('loader-text').innerText = "Error de conexión";
                 document.getElementById('connection-error').classList.remove('hidden');
             }
         };
@@ -246,10 +397,25 @@
 
         function syncUsers() {
             if (unsubUsers) unsubUsers();
-            const usersRef = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+            const usersRef = collection(db, 'artifacts', dbAppId, 'public', 'data', 'users');
             unsubUsers = onSnapshot(usersRef, (snap) => {
                 allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                document.getElementById('loading-overlay').classList.add('hidden'); // AQUÍ SE QUITA EL OVERLAY SOLO SI TODO VA BIEN
+                
+                // Comprobación de Sesión Persistente
+                const savedUserId = localStorage.getItem('dw_logged_in_user');
+                let autoLogged = false;
+
+                if (!currentUser && savedUserId) {
+                    const found = allUsers.find(u => u.id === savedUserId);
+                    if (found && found.pass !== "") {
+                        currentUser = found;
+                        autoLogged = true;
+                    } else {
+                        localStorage.removeItem('dw_logged_in_user');
+                    }
+                }
+
+                document.getElementById('loading-overlay').classList.add('hidden');
                 
                 if (allUsers.length === 0) {
                     document.getElementById('setup-screen').classList.remove('hidden');
@@ -260,22 +426,35 @@
                 }
                 
                 if (currentUser) {
+                    if(autoLogged) {
+                        document.getElementById('login-screen').classList.add('hidden');
+                        document.getElementById('app-content').classList.remove('hidden');
+                        if (currentUser.isAdmin) {
+                            document.getElementById('tab-admin').classList.remove('hidden');
+                            adminManualToggle.classList.remove('hidden');
+                        }
+                        syncData();
+                        showTab('register');
+                        if (localStorage.getItem('dw_active_walk_start')) {
+                            timerInterval = setInterval(updateTimerUI, 1000);
+                        }
+                        updateTimerUI();
+                    }
                     renderAdmin();
                     updateWalkerOptions();
                 }
             }, (err) => {
                 console.error("Error usuarios:", err);
                 document.getElementById('loader-spinner').classList.add('hidden');
-                document.getElementById('loader-text').classList.add('hidden');
+                document.getElementById('loader-text').innerText = "Revisa tu base de datos";
                 document.getElementById('connection-error').classList.remove('hidden');
-                document.getElementById('connection-error-msg').innerText = "Error leyendo usuarios: " + err.message;
             });
         }
 
         function syncData() {
             if (!currentUser) return;
             if (unsubWalks) unsubWalks();
-            const walksRef = collection(db, 'artifacts', appId, 'public', 'data', 'walks');
+            const walksRef = collection(db, 'artifacts', dbAppId, 'public', 'data', 'walks');
             unsubWalks = onSnapshot(walksRef, (snap) => {
                 allWalks = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp);
                 renderHistory();
@@ -285,6 +464,7 @@
 
         // --- HELPERS ---
         function getPeriod(timeStr) {
+            if(!timeStr) return "Desconocido";
             const [h, m] = timeStr.split(':').map(Number);
             const total = h * 60 + m;
             if (total >= 300 && total <= 540) return "Mañana";
@@ -326,7 +506,6 @@
             const btn = target.closest('button');
             if (!btn) return;
 
-            // Tabs
             if (btn.dataset.tab) {
                 showTab(btn.dataset.tab);
                 return;
@@ -338,8 +517,8 @@
             if (action) {
                 if (action === 'reset-pass' && id) {
                     const user = allUsers.find(u => u.id === id);
-                    showModal('Restablecer Clave', `¿Borrar la contraseña de ${user.name}? Deberá crear una nueva al entrar.`, async () => {
-                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id), { pass: "" });
+                    showModal('Restablecer Clave', `¿Borrar la contraseña de ${user.name}?`, async () => {
+                        await updateDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id), { pass: "" });
                     });
                 }
                 
@@ -348,27 +527,31 @@
                         showModal('Error', 'No puedes borrar tu propia cuenta.', null);
                         return;
                     }
-                    showModal('Eliminar Usuario', '¿Estás seguro de eliminar este usuario definitivamente?', async () => {
-                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id));
+                    showModal('Eliminar Usuario', 'Esta acción es irreversible.', async () => {
+                        await deleteDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id));
                     });
                 }
 
                 if (action === 'delete-walk' && id) {
-                    showModal('Borrar Paseo', '¿Eliminar este registro del historial?', async () => {
-                        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'walks', id));
+                    showModal('Borrar Paseo', '¿Eliminar este registro?', async () => {
+                        await deleteDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id));
                     });
                 }
 
                 if (action === 'edit-walk' && id) {
                     const w = allWalks.find(walk => walk.id === id);
                     if (w) {
+                        viewTimer.classList.add('hidden');
+                        viewManual.classList.remove('hidden');
+                        adminManualToggle.classList.add('hidden'); // Ocultar toggle mientras edita
+
                         document.getElementById('editWalkId').value = w.id;
                         document.getElementById('walkerSelect').value = w.walker;
                         document.getElementById('startTime').value = w.start;
                         document.getElementById('endTime').value = w.end;
-                        document.getElementById('formTitle').innerText = "Editando Registro";
-                        document.getElementById('submitWalkBtn').innerText = "Actualizar Registro";
                         document.getElementById('cancelEditBtn').classList.remove('hidden');
+                        document.getElementById('formTitle').innerHTML = `<span>✏️</span> Editando Paseo`;
+                        document.getElementById('submitWalkBtn').innerHTML = `<span>🔄</span> Actualizar Cambios`;
                         showTab('register');
                     }
                 }
@@ -398,13 +581,24 @@
 
         function loginSuccess(user) {
             currentUser = user;
+            localStorage.setItem('dw_logged_in_user', user.id); // Guardar sesión local
+
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-content').classList.remove('hidden');
             if (user.isAdmin) {
                 document.getElementById('tab-admin').classList.remove('hidden');
+                adminManualToggle.classList.remove('hidden');
+            } else {
+                document.getElementById('tab-admin').classList.add('hidden');
+                adminManualToggle.classList.add('hidden');
             }
             syncData();
             showTab('register');
+            
+            if (localStorage.getItem('dw_active_walk_start')) {
+                timerInterval = setInterval(updateTimerUI, 1000);
+            }
+            updateTimerUI();
             updateWalkerOptions();
         }
 
@@ -412,19 +606,23 @@
             const pass = document.getElementById('newAccountPass').value;
             if (pass.length < 4) return showModal('Error', 'Mínimo 4 caracteres', null);
             try {
-                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', pendingUser.id), { pass });
+                await updateDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', pendingUser.id), { pass });
                 const updated = {...pendingUser, pass};
                 document.getElementById('password-setup-modal').classList.add('hidden');
                 loginSuccess(updated);
             } catch (e) { console.error(e); }
         });
 
+        // EDICIÓN MANUAL Y NUEVOS REGISTROS MANUALES (Admins)
         document.getElementById('walkForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const editId = document.getElementById('editWalkId').value;
-            const id = editId || crypto.randomUUID();
+            const id = editId || crypto.randomUUID(); // Si no hay editId, generamos uno nuevo
             const start = document.getElementById('startTime').value;
             const end = document.getElementById('endTime').value;
+            
+            if (!start || !end) return showModal("Error", "Faltan las horas", null);
+
             const [h1, m1] = start.split(':').map(Number);
             const [h2, m2] = end.split(':').map(Number);
             let dur = (h2 * 60 + m2) - (h1 * 60 + m1);
@@ -438,25 +636,37 @@
                 recordedBy: currentUser.name
             };
 
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'walks', id), walkData);
-            cancelEdit();
-            showTab('history');
+            try {
+                await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id), walkData);
+                cancelEdit();
+                showTab('history');
+            } catch (err) {
+                showModal("Error", "No se pudo guardar: " + err.message, null);
+            }
         });
 
         function cancelEdit() {
             document.getElementById('walkForm').reset();
             document.getElementById('editWalkId').value = "";
-            document.getElementById('formTitle').innerText = "Nuevo Paseo";
-            document.getElementById('submitWalkBtn').innerText = "Guardar en la Nube";
             document.getElementById('cancelEditBtn').classList.add('hidden');
+            
+            viewTimer.classList.remove('hidden');
+            viewManual.classList.add('hidden');
+            
+            isManualMode = false;
+            btnToggleMode.innerText = "Añadir manualmente";
+            if (currentUser && currentUser.isAdmin) adminManualToggle.classList.remove('hidden');
+            document.getElementById('formTitle').innerHTML = `<span>🐾</span> Paseo Activo`;
+            
             updateWalkerOptions();
+            updateTimerUI();
         }
         document.getElementById('cancelEditBtn').onclick = cancelEdit;
 
         document.getElementById('userForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = crypto.randomUUID();
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id), {
+            await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id), {
                 name: document.getElementById('userName').value.trim(),
                 pass: document.getElementById('userPass').value || "",
                 isAdmin: document.getElementById('userIsAdmin').checked
@@ -472,17 +682,20 @@
                 pass: document.getElementById('setupPass').value,
                 isAdmin: true
             };
-            await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', id), adminData);
+            await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id), adminData);
             document.getElementById('setup-screen').classList.add('hidden');
             loginSuccess({...adminData, id});
         });
 
-        document.getElementById('logoutBtn').onclick = () => location.reload();
+        document.getElementById('logoutBtn').onclick = () => {
+            localStorage.removeItem('dw_logged_in_user'); // Borrar sesión al salir
+            location.reload();
+        };
 
         // --- RENDERIZADO ---
 
         function showTab(tab) {
-            document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
             const target = document.getElementById(`section-${tab}`);
             if (target) target.classList.remove('hidden');
             document.querySelectorAll('nav button').forEach(b => b.classList.remove('tab-active', 'text-sky-600'));
@@ -496,33 +709,40 @@
             if (!s) return;
             const currentVal = s.value;
             s.innerHTML = allUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('');
-            if (currentVal && allUsers.some(u => u.name === currentVal)) s.value = currentVal;
-            else s.value = currentUser?.name || "";
+            
+            const activeWalker = localStorage.getItem('dw_active_walker');
+            if (activeWalker && allUsers.some(u => u.name === activeWalker)) {
+                s.value = activeWalker;
+            } else if (currentVal && allUsers.some(u => u.name === currentVal)) {
+                s.value = currentVal;
+            } else {
+                s.value = currentUser?.name || "";
+            }
         }
 
         function renderHistory() {
             const list = document.getElementById('historyList');
-            if (allWalks.length === 0) return list.innerHTML = `<div class="text-center py-20 text-sky-200 font-bold">Sin datos sincronizados</div>`;
+            if (allWalks.length === 0) return list.innerHTML = `<div class="text-center py-20 text-sky-200 font-bold text-xs uppercase tracking-widest">Sin registros</div>`;
             
             list.innerHTML = allWalks.map(w => {
                 const period = getPeriod(w.start);
                 return `
-                <div class="card p-5 border-l-4 ${w.duration >= 30 ? 'border-sky-400' : 'border-sky-200'}">
+                <div class="card p-4 border-l-4 ${w.duration >= 30 ? 'border-sky-400' : 'border-sky-200'} bg-white mb-3">
                     <div class="flex justify-between items-start">
                         <div>
                             <div class="flex items-center gap-2 mb-1">
-                                <p class="font-bold text-sky-900 text-lg">${w.walker}</p>
+                                <p class="font-bold text-sky-900 text-base">${w.walker}</p>
                                 <span class="bg-sky-50 text-sky-600 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${period}</span>
                             </div>
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">${w.date} · ${w.start} - ${w.end}</p>
                             <p class="text-[9px] text-slate-300 font-medium mt-1">Registrado por: ${w.recordedBy || '?'}</p>
                         </div>
                         <div class="text-right">
-                            <p class="text-2xl font-black text-sky-600 leading-none">${w.duration}<span class="text-[10px] ml-1 opacity-50 uppercase font-black">min</span></p>
+                            <p class="text-xl font-black text-sky-600 leading-none font-timer">${w.duration}<span class="text-[9px] ml-0.5 opacity-50 uppercase font-black font-sans">min</span></p>
                             ${currentUser.isAdmin ? `
-                                <div class="flex gap-2 mt-3 justify-end">
-                                    <button data-action="edit-walk" data-id="${w.id}" class="text-[9px] font-black text-sky-400 border border-sky-100 px-2 py-1 rounded-lg uppercase">Editar</button>
-                                    <button data-action="delete-walk" data-id="${w.id}" class="text-[9px] font-black text-red-300 border border-red-50 px-2 py-1 rounded-lg uppercase">Borrar</button>
+                                <div class="flex gap-2 mt-2 justify-end">
+                                    <button data-action="edit-walk" data-id="${w.id}" class="text-[9px] font-bold text-sky-400 border border-sky-100 px-2 py-1 rounded-lg uppercase bg-sky-50">Editar</button>
+                                    <button data-action="delete-walk" data-id="${w.id}" class="text-[9px] font-bold text-red-300 border border-red-50 px-2 py-1 rounded-lg uppercase bg-red-50">Borrar</button>
                                 </div>
                             ` : ''}
                         </div>
@@ -535,16 +755,19 @@
             const uList = document.getElementById('usersList');
             if (!uList) return;
             uList.innerHTML = allUsers.map(u => `
-                <div class="flex justify-between items-center p-4 bg-white border border-sky-50 rounded-2xl">
+                <div class="flex justify-between items-center p-3 bg-white border border-sky-50 rounded-xl mb-2 shadow-sm">
                     <div>
-                        <p class="font-black text-sky-900 text-sm">${u.name} ${u.isAdmin ? '⭐' : ''}</p>
-                        <p class="text-[9px] font-bold ${(!u.pass) ? 'text-orange-400' : 'text-sky-300'} uppercase">
-                            ${(!u.pass) ? 'Pendiente' : 'Activo'}
+                        <p class="font-bold text-sky-900 text-xs flex items-center gap-1">
+                            ${u.name} 
+                            ${u.isAdmin ? '<span class="text-[8px] bg-sky-100 text-sky-600 px-1 rounded uppercase">Admin</span>' : ''}
+                        </p>
+                        <p class="text-[8px] font-bold ${(!u.pass) ? 'text-orange-400' : 'text-slate-300'} uppercase mt-0.5 tracking-wider">
+                            ${(!u.pass) ? '⚠️ Clave Pendiente' : '✅ Activo'}
                         </p>
                     </div>
                     <div class="flex gap-2">
-                        <button data-action="reset-pass" data-id="${u.id}" class="p-2 bg-sky-50 text-sky-500 rounded-xl text-xs hover:bg-sky-100 transition-colors">🔄</button>
-                        <button data-action="delete-user" data-id="${u.id}" class="p-2 bg-red-50 text-red-300 rounded-xl text-xs hover:bg-red-100 transition-colors">✕</button>
+                        <button data-action="reset-pass" data-id="${u.id}" class="p-2 bg-sky-50 text-sky-500 rounded-lg text-xs hover:bg-sky-100 transition-colors">🔄</button>
+                        <button data-action="delete-user" data-id="${u.id}" class="p-2 bg-red-50 text-red-300 rounded-lg text-xs hover:bg-red-100 transition-colors">✕</button>
                     </div>
                 </div>
             `).join('');
@@ -558,9 +781,17 @@
             if (charts.w) charts.w.destroy();
             if (charts.t) charts.t.destroy();
             
-            const opt = { responsive: true, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 9, weight: 'bold' } } }, x: { ticks: { font: { size: 9, weight: 'bold' } } } } };
-            charts.w = new Chart(document.getElementById('chartWalks'), { type: 'bar', data: { labels: names, datasets: [{ data: counts, backgroundColor: '#7dd3fc', borderRadius: 8 }] }, options: opt });
-            charts.t = new Chart(document.getElementById('chartTime'), { type: 'bar', data: { labels: names, datasets: [{ data: times, backgroundColor: '#38bdf8', borderRadius: 8 }] }, options: opt });
+            const opt = { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } }, 
+                scales: { 
+                    y: { beginAtZero: true, ticks: { font: { size: 9, weight: 'bold' } }, grid: { display: false } }, 
+                    x: { ticks: { font: { size: 9, weight: 'bold' } }, grid: { display: false } } 
+                } 
+            };
+            charts.w = new Chart(document.getElementById('chartWalks'), { type: 'bar', data: { labels: names, datasets: [{ data: counts, backgroundColor: '#7dd3fc', borderRadius: 6 }] }, options: opt });
+            charts.t = new Chart(document.getElementById('chartTime'), { type: 'bar', data: { labels: names, datasets: [{ data: times, backgroundColor: '#38bdf8', borderRadius: 6 }] }, options: opt });
         }
 
         window.addEventListener('load', initAuth);
