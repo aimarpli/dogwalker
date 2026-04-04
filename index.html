@@ -10,6 +10,11 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- LEAFLET MAPS CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f0f9ff; color: #1e293b; }
@@ -21,9 +26,9 @@
         input:focus, select:focus { border-color: #7dd3fc; ring: 3px; ring-color: #e0f2fe; outline: none; }
         .loader { border-top-color: #38bdf8; animation: spinner 1.5s linear infinite; }
         @keyframes spinner { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        /* Cronómetro fuente monoespaciada */
         .font-timer { font-variant-numeric: tabular-nums; letter-spacing: -1px; }
         input[type="time"] { -webkit-appearance: none; }
+        .leaflet-container { z-index: 10 !important; }
     </style>
 </head>
 <body class="min-h-screen bg-slate-50">
@@ -35,18 +40,32 @@
         
         <div id="connection-error" class="hidden flex flex-col items-center mt-4">
             <span class="text-3xl mb-2">📡</span>
-            <p id="connection-error-msg" class="text-red-400 text-xs max-w-xs mx-auto">Error de conexión.</p>
+            <p id="connection-error-msg" class="text-red-400 text-xs max-w-xs mx-auto">Error de base de datos.</p>
         </div>
     </div>
 
     <!-- MODAL CONFIRMACIÓN -->
-    <div id="custom-modal" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center px-6 hidden">
+    <div id="custom-modal" class="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[100] flex items-center justify-center px-6 hidden">
         <div class="card p-6 w-full max-w-xs text-center bg-white shadow-2xl transform transition-all scale-100">
             <h3 id="modal-title" class="font-bold text-lg text-slate-800 mb-2">Confirmar</h3>
             <p id="modal-msg" class="text-sm text-slate-500 mb-6 leading-tight"></p>
             <div class="flex gap-3 justify-center">
                 <button id="btn-modal-cancel" class="flex-1 py-3 rounded-xl border border-slate-200 text-slate-500 font-bold text-xs">Cancelar</button>
                 <button id="btn-modal-confirm" class="flex-1 py-3 rounded-xl bg-red-400 text-white font-bold text-xs shadow-lg shadow-red-200">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL VISOR DE MAPA -->
+    <div id="route-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] flex items-center justify-center px-4 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col h-[70vh]">
+            <div class="flex justify-between items-center p-4 border-b border-slate-100 bg-white z-20">
+                <h3 class="font-bold text-sky-900 flex items-center gap-2"><span class="text-xl">📍</span> Ruta del paseo</h3>
+                <button id="close-map-btn" class="bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-400 w-8 h-8 rounded-full font-bold text-lg flex items-center justify-center transition-colors">&times;</button>
+            </div>
+            <div id="map-view" class="flex-1 w-full relative z-10 bg-slate-100"></div>
+            <div class="p-3 bg-sky-50 text-[10px] text-sky-600 font-medium text-center uppercase tracking-widest border-t border-sky-100 z-20">
+                Rastreo GPS de MaxWalker
             </div>
         </div>
     </div>
@@ -68,7 +87,7 @@
     <div id="login-screen" class="min-h-screen flex items-center justify-center px-6 hidden">
         <div class="card p-6 w-full max-w-sm border border-sky-50">
             <div class="text-center mb-6">
-                <!-- LOGO PERSONALIZADO: Busca icon.png. Si falla, pone foto de prueba -->
+                <!-- LOGO PERSONALIZADO -->
                 <img src="icon.png" alt="Logo Perro" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&w=200&q=80';" class="w-24 h-24 mx-auto object-cover rounded-full shadow-lg border-4 border-sky-50">
             </div>
             <h1 class="text-2xl font-bold text-center mb-1 text-sky-900">MaxWalker</h1>
@@ -94,7 +113,7 @@
 
     <!-- APP PRINCIPAL -->
     <div id="app-content" class="hidden flex flex-col h-screen">
-        <nav class="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-10 border-b border-sky-50 shrink-0">
+        <nav class="bg-white/90 backdrop-blur-md shadow-sm sticky top-0 z-40 border-b border-sky-50 shrink-0">
             <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center text-[10px] font-bold uppercase tracking-wide">
                 <div class="flex gap-4 sm:gap-6">
                     <button id="tab-register" class="pb-1 tab-active" data-tab="register">Registrar</button>
@@ -119,25 +138,40 @@
                     
                     <div>
                         <label class="block text-[10px] uppercase font-bold text-sky-400 mb-1.5 ml-1">¿Quién pasea?</label>
-                        <div class="relative">
-                            <select id="walkerSelect" class="w-full p-3.5 border border-sky-100 rounded-xl bg-sky-50/30 font-semibold text-slate-700 text-sm appearance-none outline-none focus:ring-2 focus:ring-sky-100"></select>
-                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-sky-400">
-                                <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                            </div>
+                        <!-- Selector múltiple (Chips) -->
+                        <div id="walkersList" class="flex flex-wrap gap-2 mt-2 mb-4">
+                            <!-- Los botones se generarán aquí -->
                         </div>
                     </div>
 
                     <!-- MODO CRONÓMETRO GIGANTE -->
-                    <div id="view-timer" class="mt-8 mb-6 flex flex-col items-center">
+                    <div id="view-timer" class="mt-8 mb-4 flex flex-col items-center">
                         <button id="btn-circle-timer" class="relative w-48 h-48 rounded-full bg-gradient-to-tr from-sky-400 to-sky-300 text-white shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)] flex flex-col items-center justify-center transition-transform transform hover:scale-105 active:scale-95 outline-none">
                             <span id="circle-icon" class="text-4xl mb-1">▶️</span>
                             <span id="circle-time" class="text-5xl font-black font-timer hidden tracking-tighter drop-shadow-md">00:00</span>
                             <span id="circle-text" class="font-bold tracking-widest uppercase text-xs mt-1 opacity-90">Iniciar</span>
                         </button>
+                        
+                        <!-- CASILLA DE GUARDAR RUTA -->
+                        <div id="route-toggle-container" class="mt-6 flex flex-col items-center w-full">
+                            <div class="flex items-center justify-center gap-2 bg-sky-50 px-4 py-2.5 rounded-full border border-sky-100 cursor-pointer hover:bg-sky-100 transition-colors">
+                                <input type="checkbox" id="record-route-toggle" class="w-4 h-4 text-sky-500 rounded border-sky-300 bg-white cursor-pointer accent-sky-500">
+                                <label for="record-route-toggle" class="text-[10px] font-bold text-sky-900 uppercase tracking-widest cursor-pointer select-none">Guardar ruta GPS</label>
+                            </div>
+                            
+                            <div id="gps-warning-inline" class="mt-3 bg-orange-50 border border-orange-200 text-orange-700 text-[10px] p-3 rounded-xl hidden text-center w-full max-w-[280px]">
+                                <strong>⚠️ Atención:</strong> Para que la ruta se guarde bien, <strong>no apagues la pantalla</strong> ni salgas de la aplicación durante el paseo.
+                            </div>
+                        </div>
+
+                        <!-- INDICADOR GPS -->
+                        <div id="gps-status" class="mt-4 text-[10px] font-bold text-slate-400 flex items-center gap-1 opacity-0 transition-opacity hidden">
+                            <span class="animate-pulse text-sky-500 text-xs">📍</span> Paseo global en curso...
+                        </div>
                     </div>
 
                     <!-- BOTÓN TOGGLE MANUAL (Solo para Admins) -->
-                    <div id="admin-manual-toggle" class="text-center mt-2 mb-4 hidden">
+                    <div id="admin-manual-toggle" class="text-center mt-2 mb-2 hidden">
                         <button id="btn-toggle-mode" type="button" class="text-[10px] font-bold text-slate-400 uppercase hover:text-sky-500 underline decoration-slate-200 underline-offset-4">
                             Añadir manualmente
                         </button>
@@ -157,7 +191,7 @@
                             </div>
                         </div>
                         <button type="submit" id="submitWalkBtn" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 rounded-xl shadow-lg text-sm flex justify-center items-center gap-2">
-                            <span>🔄</span> Actualizar Cambios
+                            <span>🔄</span> Guardar Manual
                         </button>
                     </form>
                 </div>
@@ -217,8 +251,7 @@
         import { getFirestore, doc, setDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
-        // 🔴 PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE 🔴
-        // Borra los datos falsos que hay aquí y pega los tuyos de la consola de Firebase.
+        // TUS LLAVES DE FIREBASE
         // =========================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyAyLqdIbmEZeLk6hFIKXVWHhgA37vgX9sw",
@@ -229,7 +262,6 @@
             appId: "1:531303785074:web:ece0891cfebc06ac8218eb",
             measurementId: "G-MJPHBFNK54"
         };
-        // =========================================================================
 
         let app, auth, db;
         try {
@@ -238,12 +270,13 @@
             db = getFirestore(app);
         } catch (e) {
             console.error("Error iniciando Firebase:", e);
-            document.getElementById('loader-text').innerText = "Error de configuración";
+            document.getElementById('loader-text').innerText = "Error local";
         }
 
-        // Esta es la ruta principal en tu base de datos donde se guardará todo
+        // Restaurado a la carpeta original para recuperar los paseos anteriores
         const dbAppId = 'dogwalker-pl-main-db';
 
+        // VARIABLES GLOBALES DECLARADAS CORRECTAMENTE
         let currentUser = null;
         let allUsers = [];
         let allWalks = [];
@@ -252,6 +285,107 @@
         let unsubUsers = null;
         let unsubWalks = null;
         let pendingAction = null; 
+        
+        let globalActiveWalk = null; // Controla el estado del cronómetro en la nube
+        let unsubActiveWalk = null;
+
+        // --- SISTEMA WAKE LOCK (Evitar que la pantalla se apague) ---
+        let wakeLock = null;
+
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                }
+            } catch (err) {
+                // Manejado de forma silenciosa para entornos restrictivos (ej. iframes)
+                console.warn('Wake Lock no permitido o soportado. La pantalla podría apagarse.', err.message);
+            }
+        }
+
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => { wakeLock = null; }).catch(err => console.warn(err));
+            }
+        }
+
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
+            }
+        });
+
+
+        // --- SISTEMA GPS Y RUTAS ---
+        let geoWatchId = null;
+        let activeRoute = []; 
+
+        function startGPSTracking() {
+            const savedRoute = localStorage.getItem('mw_active_route');
+            if (savedRoute) activeRoute = JSON.parse(savedRoute);
+            else activeRoute = [];
+
+            if ("geolocation" in navigator) {
+                if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        const lastPoint = activeRoute[activeRoute.length - 1];
+                        if (!lastPoint || (Math.abs(lastPoint[0] - lat) > 0.0001 || Math.abs(lastPoint[1] - lng) > 0.0001)) {
+                            activeRoute.push([lat, lng]);
+                            localStorage.setItem('mw_active_route', JSON.stringify(activeRoute));
+                        }
+                    },
+                    (error) => { console.warn("Error GPS: ", error.message); },
+                    { enableHighAccuracy: true, maximumAge: 10000, timeout: 5000 }
+                );
+            }
+        }
+
+        function stopGPSTracking() {
+            if (geoWatchId !== null) {
+                navigator.geolocation.clearWatch(geoWatchId);
+                geoWatchId = null;
+            }
+            const finalRoute = [...activeRoute];
+            activeRoute = [];
+            localStorage.removeItem('mw_active_route');
+            return finalRoute; 
+        }
+
+        // --- MAPA LEAFLET LOGICA ---
+        let leafletMap = null;
+        let leafletPolyline = null;
+        const routeModal = document.getElementById('route-modal');
+
+        function showRouteMap(walkId) {
+            const walk = allWalks.find(w => w.id === walkId);
+            if (!walk || !walk.route || walk.route.length === 0) return;
+
+            routeModal.classList.remove('hidden');
+
+            setTimeout(() => {
+                if (!leafletMap) {
+                    leafletMap = L.map('map-view').setView(walk.route[0], 15);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '&copy; OpenStreetMap contributors'
+                    }).addTo(leafletMap);
+                }
+
+                if (leafletPolyline) leafletMap.removeLayer(leafletPolyline);
+
+                leafletPolyline = L.polyline(walk.route, { color: '#38bdf8', weight: 5, opacity: 0.8 }).addTo(leafletMap);
+                
+                L.circleMarker(walk.route[0], { radius: 6, fillColor: '#22c55e', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(leafletMap);
+                L.circleMarker(walk.route[walk.route.length - 1], { radius: 6, fillColor: '#ef4444', color: '#fff', weight: 2, fillOpacity: 1 }).addTo(leafletMap);
+
+                leafletMap.fitBounds(leafletPolyline.getBounds(), { padding: [20, 20] });
+                leafletMap.invalidateSize();
+            }, 100);
+        }
+
+        document.getElementById('close-map-btn').onclick = () => { routeModal.classList.add('hidden'); };
 
         // --- CRONÓMETRO CIRCULAR LÓGICA ---
         let timerInterval = null;
@@ -259,9 +393,14 @@
         const circleIcon = document.getElementById('circle-icon');
         const circleTime = document.getElementById('circle-time');
         const circleText = document.getElementById('circle-text');
+        
+        const gpsStatus = document.getElementById('gps-status');
+        const routeToggleContainer = document.getElementById('route-toggle-container');
+        const recordRouteToggle = document.getElementById('record-route-toggle');
+        const gpsWarningInline = document.getElementById('gps-warning-inline');
+        
         const viewTimer = document.getElementById('view-timer');
         const viewManual = document.getElementById('walkForm');
-        
         const btnToggleMode = document.getElementById('btn-toggle-mode');
         const adminManualToggle = document.getElementById('admin-manual-toggle');
         let isManualMode = false;
@@ -270,24 +409,41 @@
             return String(date.getHours()).padStart(2, '0') + ':' + String(date.getMinutes()).padStart(2, '0');
         }
 
+        recordRouteToggle.addEventListener('change', (e) => {
+            if (e.target.checked) gpsWarningInline.classList.remove('hidden');
+            else gpsWarningInline.classList.add('hidden');
+        });
+
+        function getSelectedWalkers() {
+            return Array.from(document.querySelectorAll('.walker-chip.bg-sky-500')).map(b => b.dataset.name).join(' + ');
+        }
+
         function updateTimerUI() {
-            const startMs = parseInt(localStorage.getItem('dw_active_walk_start'));
-            if (!startMs) {
-                // Estado Inactivo
+            if (!globalActiveWalk) {
+                // ESTADO INACTIVO
                 circleIcon.classList.remove('hidden');
                 circleTime.classList.add('hidden');
                 circleText.innerText = "Iniciar";
                 
+                gpsStatus.classList.add('hidden');
+                gpsStatus.classList.remove('opacity-100');
+                
+                routeToggleContainer.classList.remove('hidden');
+                if (recordRouteToggle.checked) gpsWarningInline.classList.remove('hidden');
+                else gpsWarningInline.classList.add('hidden');
+                
                 btnCircleTimer.classList.remove('from-red-400', 'to-red-300', 'shadow-[0_10px_40px_-10px_rgba(248,113,113,0.6)]', 'animate-pulse');
                 btnCircleTimer.classList.add('from-sky-400', 'to-sky-300', 'shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]');
                 
-                document.getElementById('walkerSelect').disabled = false;
-                clearInterval(timerInterval);
+                if (timerInterval) {
+                    clearInterval(timerInterval);
+                    timerInterval = null;
+                }
                 return;
             }
 
-            // Estado Activo (Calculando tiempo)
-            const diff = Date.now() - startMs;
+            // ESTADO ACTIVO (Cronómetro global)
+            const diff = Date.now() - globalActiveWalk.startMs;
             const totalSeconds = Math.floor(diff / 1000);
             const mins = Math.floor(totalSeconds / 60);
             const secs = totalSeconds % 60;
@@ -297,60 +453,111 @@
             circleIcon.classList.add('hidden');
             circleTime.classList.remove('hidden');
             circleText.innerText = "Finalizar";
+            
+            routeToggleContainer.classList.add('hidden');
+            gpsWarningInline.classList.add('hidden');
+
+            gpsStatus.classList.remove('hidden');
+            gpsStatus.classList.add('opacity-100');
 
             btnCircleTimer.classList.remove('from-sky-400', 'to-sky-300', 'shadow-[0_10px_40px_-10px_rgba(56,189,248,0.6)]');
             btnCircleTimer.classList.add('from-red-400', 'to-red-300', 'shadow-[0_10px_40px_-10px_rgba(248,113,113,0.6)]', 'animate-pulse');
             
-            document.getElementById('walkerSelect').disabled = true;
+            if (!timerInterval) timerInterval = setInterval(updateTimerUI, 1000);
         }
 
         btnCircleTimer.onclick = async () => {
-            const startMs = parseInt(localStorage.getItem('dw_active_walk_start'));
-            if (!startMs) {
-                // INICIAR PASEO
-                localStorage.setItem('dw_active_walk_start', Date.now().toString());
-                localStorage.setItem('dw_active_walker', document.getElementById('walkerSelect').value);
-                timerInterval = setInterval(updateTimerUI, 1000);
-                updateTimerUI();
-            } else {
-                // FINALIZAR Y GUARDAR
-                const endMs = Date.now();
-                const walker = localStorage.getItem('dw_active_walker') || document.getElementById('walkerSelect').value;
-                
-                const startDate = new Date(startMs);
-                const endDate = new Date(endMs);
-                
-                let durationMins = Math.round((endMs - startMs) / 60000);
-                if (durationMins < 1) durationMins = 1; // Mínimo 1 minuto
+            if (!globalActiveWalk) {
+                // INICIAR PASEO GLOBAL
+                const walkers = getSelectedWalkers();
+                if (!walkers) return showModal("Aviso", "¡Por favor, selecciona quién va a pasear!", null);
 
-                const walkData = {
-                    walker: walker,
-                    start: formatTimeJS(startDate),
-                    end: formatTimeJS(endDate),
-                    duration: durationMins,
-                    date: startDate.toLocaleDateString('es-ES'),
-                    timestamp: endMs,
-                    recordedBy: currentUser.name
+                const wantToRecordGPS = recordRouteToggle.checked;
+
+                const startWalkProcess = async () => {
+                    if (wantToRecordGPS) {
+                        requestWakeLock();
+                        startGPSTracking();
+                        localStorage.setItem('mw_am_i_recording', 'true'); // Sé que mi móvil es el que graba
+                    }
+
+                    // Enviar estado a la nube para que otros no puedan iniciar
+                    await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'active_walk', 'current'), {
+                        startMs: Date.now(),
+                        walkers: walkers,
+                        ownerId: currentUser.id
+                    });
                 };
 
-                // Limpiar Cronómetro Local
-                localStorage.removeItem('dw_active_walk_start');
-                localStorage.removeItem('dw_active_walker');
-                clearInterval(timerInterval);
-                updateTimerUI();
+                if (wantToRecordGPS) {
+                    showModal("¡Atención!", "Para que la ruta se guarde bien, NO APAGUES la pantalla ni cambies de aplicación. La pantalla se mantendrá encendida sola.", startWalkProcess);
+                } else {
+                    startWalkProcess();
+                }
 
-                // Subir a Nube
-                try {
-                    const id = crypto.randomUUID();
-                    await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id), walkData);
-                    showTab('history');
-                } catch (err) {
-                    showModal("Error", "No se pudo guardar el paseo: " + err.message, null);
+            } else {
+                // FINALIZAR Y GUARDAR
+                const finishWalk = async () => {
+                    const endMs = Date.now();
+                    const startDate = new Date(globalActiveWalk.startMs);
+                    const endDate = new Date(endMs);
+                    
+                    let durationMins = Math.round((endMs - globalActiveWalk.startMs) / 60000);
+                    if (durationMins < 1) durationMins = 1;
+
+                    const amIRecording = localStorage.getItem('mw_am_i_recording') === 'true';
+                    let savedRoute = [];
+                    
+                    if (amIRecording) {
+                        releaseWakeLock();
+                        savedRoute = stopGPSTracking();
+                        localStorage.removeItem('mw_am_i_recording');
+                    }
+
+                    const walkData = {
+                        walker: globalActiveWalk.walkers,
+                        start: formatTimeJS(startDate),
+                        end: formatTimeJS(endDate),
+                        duration: durationMins,
+                        date: startDate.toLocaleDateString('es-ES'),
+                        timestamp: endMs,
+                        recordedBy: currentUser.name
+                    };
+
+                    if (savedRoute.length > 0) {
+                        walkData.route = savedRoute;
+                    }
+
+                    try {
+                        const id = crypto.randomUUID();
+                        await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id), walkData);
+                        await deleteDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'active_walk', 'current'));
+                        showTab('history');
+                    } catch (err) {
+                        showModal("Error", "No se pudo guardar: " + err.message, null);
+                    }
+                };
+
+                // Comprobación de permisos para finalizar el paseo
+                const walkParticipants = globalActiveWalk.walkers.split(' + ');
+                const isParticipant = walkParticipants.includes(currentUser.name);
+                const isOwner = (globalActiveWalk.ownerId === currentUser.id);
+
+                if (!isOwner && !isParticipant) {
+                    if (currentUser.isAdmin) {
+                        // Es administrador pero no participa en el paseo: le dejamos con un aviso
+                        showModal("Atención", "No estás registrado en este paseo. Si lo finalizas tú, la ruta GPS (si se estaba grabando en el otro móvil) podría perderse. ¿Finalizar de todas formas?", finishWalk);
+                    } else {
+                        // Usuario normal intentando parar el paseo de otras personas
+                        showModal("Acceso Denegado", "Solo las personas que están dando este paseo o un administrador pueden finalizarlo.", null);
+                    }
+                } else {
+                    // Es uno de los paseadores registrados o el creador
+                    finishWalk();
                 }
             }
         };
 
-        // EVENTO DEL BOTÓN AÑADIR MANUALMENTE
         btnToggleMode.onclick = () => {
             isManualMode = !isManualMode;
             if (isManualMode) {
@@ -359,19 +566,21 @@
                 btnToggleMode.innerText = "Usar cronómetro";
                 document.getElementById('formTitle').innerHTML = `<span>📝</span> Añadir Manual`;
                 document.getElementById('submitWalkBtn').innerHTML = `<span>💾</span> Guardar Manual`;
-                document.getElementById('editWalkId').value = ""; // Limpiar para que sea un nuevo registro
+                document.getElementById('editWalkId').value = ""; 
                 document.getElementById('cancelEditBtn').classList.add('hidden');
                 
-                // Poner la hora actual por defecto para comodidad
                 const now = new Date();
                 const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                 document.getElementById('startTime').value = timeStr;
                 document.getElementById('endTime').value = timeStr;
+                
+                updateWalkerOptions(); // Restablece chips para poder seleccionarlos
             } else {
                 viewTimer.classList.remove('hidden');
                 viewManual.classList.add('hidden');
                 btnToggleMode.innerText = "Añadir manualmente";
                 document.getElementById('formTitle').innerHTML = `<span>🐾</span> Paseo Activo`;
+                updateWalkerOptions(); 
             }
         };
 
@@ -382,9 +591,8 @@
             try {
                 await signInAnonymously(auth);
             } catch(e) {
-                console.error("Auth Error:", e);
                 document.getElementById('loader-spinner').classList.add('hidden');
-                document.getElementById('loader-text').innerText = "Error de conexión";
+                document.getElementById('loader-text').innerText = "Error local";
                 document.getElementById('connection-error').classList.remove('hidden');
             }
         };
@@ -401,8 +609,7 @@
             unsubUsers = onSnapshot(usersRef, (snap) => {
                 allUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 
-                // Comprobación de Sesión Persistente
-                const savedUserId = localStorage.getItem('dw_logged_in_user');
+                const savedUserId = localStorage.getItem('mw_logged_in_user');
                 let autoLogged = false;
 
                 if (!currentUser && savedUserId) {
@@ -411,7 +618,7 @@
                         currentUser = found;
                         autoLogged = true;
                     } else {
-                        localStorage.removeItem('dw_logged_in_user');
+                        localStorage.removeItem('mw_logged_in_user');
                     }
                 }
 
@@ -420,7 +627,7 @@
                 if (allUsers.length === 0) {
                     document.getElementById('setup-screen').classList.remove('hidden');
                     document.getElementById('login-screen').classList.add('hidden');
-                } else if (!currentUser && !pendingUser) {
+                } else if (!currentUser) {
                     document.getElementById('login-screen').classList.remove('hidden');
                     document.getElementById('setup-screen').classList.add('hidden');
                 }
@@ -435,31 +642,51 @@
                         }
                         syncData();
                         showTab('register');
-                        if (localStorage.getItem('dw_active_walk_start')) {
-                            timerInterval = setInterval(updateTimerUI, 1000);
-                        }
-                        updateTimerUI();
                     }
                     renderAdmin();
-                    updateWalkerOptions();
                 }
-            }, (err) => {
-                console.error("Error usuarios:", err);
-                document.getElementById('loader-spinner').classList.add('hidden');
-                document.getElementById('loader-text').innerText = "Revisa tu base de datos";
-                document.getElementById('connection-error').classList.remove('hidden');
             });
         }
 
         function syncData() {
             if (!currentUser) return;
+            
+            // Escuchar el Historial
             if (unsubWalks) unsubWalks();
             const walksRef = collection(db, 'artifacts', dbAppId, 'public', 'data', 'walks');
             unsubWalks = onSnapshot(walksRef, (snap) => {
                 allWalks = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp);
                 renderHistory();
                 renderStats();
-            }, (err) => console.error("Error paseos:", err));
+            });
+
+            // Escuchar el Paseo Activo (Sincronización Global)
+            if (unsubActiveWalk) unsubActiveWalk();
+            const activeRef = collection(db, 'artifacts', dbAppId, 'public', 'data', 'active_walk');
+            unsubActiveWalk = onSnapshot(activeRef, (snap) => {
+                if (!snap.empty) {
+                    globalActiveWalk = { id: snap.docs[0].id, ...snap.docs[0].data() };
+                    
+                    // Reanudar GPS si es mi paseo, se cerró el navegador y tenía activado grabar
+                    if (globalActiveWalk.ownerId === currentUser.id && localStorage.getItem('mw_am_i_recording') === 'true') {
+                        if (geoWatchId === null) {
+                            requestWakeLock();
+                            startGPSTracking();
+                        }
+                    }
+                } else {
+                    globalActiveWalk = null;
+                    
+                    // Si se finalizó, parar de grabar GPS localmente por si acaso
+                    if (localStorage.getItem('mw_am_i_recording') === 'true') {
+                        releaseWakeLock();
+                        stopGPSTracking();
+                        localStorage.removeItem('mw_am_i_recording');
+                    }
+                }
+                updateTimerUI();
+                updateWalkerOptions(); // Bloquea o desbloquea los botones de selección
+            });
         }
 
         // --- HELPERS ---
@@ -515,6 +742,10 @@
             const id = btn.dataset.id;
 
             if (action) {
+                if (action === 'show-map' && id) {
+                    showRouteMap(id);
+                }
+
                 if (action === 'reset-pass' && id) {
                     const user = allUsers.find(u => u.id === id);
                     showModal('Restablecer Clave', `¿Borrar la contraseña de ${user.name}?`, async () => {
@@ -523,10 +754,7 @@
                 }
                 
                 if (action === 'delete-user' && id) {
-                    if (id === currentUser?.id) {
-                        showModal('Error', 'No puedes borrar tu propia cuenta.', null);
-                        return;
-                    }
+                    if (id === currentUser?.id) return showModal('Error', 'No puedes borrar tu propia cuenta.', null);
                     showModal('Eliminar Usuario', 'Esta acción es irreversible.', async () => {
                         await deleteDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id));
                     });
@@ -541,17 +769,19 @@
                 if (action === 'edit-walk' && id) {
                     const w = allWalks.find(walk => walk.id === id);
                     if (w) {
+                        isManualMode = true;
                         viewTimer.classList.add('hidden');
                         viewManual.classList.remove('hidden');
-                        adminManualToggle.classList.add('hidden'); // Ocultar toggle mientras edita
+                        adminManualToggle.classList.add('hidden'); 
 
                         document.getElementById('editWalkId').value = w.id;
-                        document.getElementById('walkerSelect').value = w.walker;
                         document.getElementById('startTime').value = w.start;
                         document.getElementById('endTime').value = w.end;
                         document.getElementById('cancelEditBtn').classList.remove('hidden');
                         document.getElementById('formTitle').innerHTML = `<span>✏️</span> Editando Paseo`;
                         document.getElementById('submitWalkBtn').innerHTML = `<span>🔄</span> Actualizar Cambios`;
+                        
+                        updateWalkerOptions(w.walker.split(' + ')); // Selecciona los paseadores previos
                         showTab('register');
                     }
                 }
@@ -581,7 +811,7 @@
 
         function loginSuccess(user) {
             currentUser = user;
-            localStorage.setItem('dw_logged_in_user', user.id); // Guardar sesión local
+            localStorage.setItem('mw_logged_in_user', user.id);
 
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('app-content').classList.remove('hidden');
@@ -594,12 +824,6 @@
             }
             syncData();
             showTab('register');
-            
-            if (localStorage.getItem('dw_active_walk_start')) {
-                timerInterval = setInterval(updateTimerUI, 1000);
-            }
-            updateTimerUI();
-            updateWalkerOptions();
         }
 
         document.getElementById('savePassBtn').addEventListener('click', async () => {
@@ -616,8 +840,11 @@
         // EDICIÓN MANUAL Y NUEVOS REGISTROS MANUALES (Admins)
         document.getElementById('walkForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const walkers = getSelectedWalkers();
+            if (!walkers) return showModal("Error", "Selecciona al menos un paseador", null);
+
             const editId = document.getElementById('editWalkId').value;
-            const id = editId || crypto.randomUUID(); // Si no hay editId, generamos uno nuevo
+            const id = editId || crypto.randomUUID();
             const start = document.getElementById('startTime').value;
             const end = document.getElementById('endTime').value;
             
@@ -628,13 +855,17 @@
             let dur = (h2 * 60 + m2) - (h1 * 60 + m1);
             if (dur < 0) dur += 1440;
 
+            const existingWalk = editId ? allWalks.find(w => w.id === editId) : null;
+
             const walkData = {
-                walker: document.getElementById('walkerSelect').value,
+                walker: walkers,
                 start, end, duration: dur,
-                date: editId ? allWalks.find(w => w.id === editId).date : new Date().toLocaleDateString('es-ES'),
-                timestamp: editId ? allWalks.find(w => w.id === editId).timestamp : Date.now(),
+                date: existingWalk ? existingWalk.date : new Date().toLocaleDateString('es-ES'),
+                timestamp: existingWalk ? existingWalk.timestamp : Date.now(),
                 recordedBy: currentUser.name
             };
+            
+            if (existingWalk && existingWalk.route) walkData.route = existingWalk.route;
 
             try {
                 await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'walks', id), walkData);
@@ -659,7 +890,6 @@
             document.getElementById('formTitle').innerHTML = `<span>🐾</span> Paseo Activo`;
             
             updateWalkerOptions();
-            updateTimerUI();
         }
         document.getElementById('cancelEditBtn').onclick = cancelEdit;
 
@@ -674,21 +904,8 @@
             document.getElementById('userForm').reset();
         });
 
-        document.getElementById('setupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const id = crypto.randomUUID();
-            const adminData = {
-                name: document.getElementById('setupUser').value.trim(),
-                pass: document.getElementById('setupPass').value,
-                isAdmin: true
-            };
-            await setDoc(doc(db, 'artifacts', dbAppId, 'public', 'data', 'users', id), adminData);
-            document.getElementById('setup-screen').classList.add('hidden');
-            loginSuccess({...adminData, id});
-        });
-
         document.getElementById('logoutBtn').onclick = () => {
-            localStorage.removeItem('dw_logged_in_user'); // Borrar sesión al salir
+            localStorage.removeItem('mw_logged_in_user');
             location.reload();
         };
 
@@ -704,20 +921,45 @@
             if (tab === 'admin') renderAdmin();
         }
 
-        function updateWalkerOptions() {
-            const s = document.getElementById('walkerSelect');
-            if (!s) return;
-            const currentVal = s.value;
-            s.innerHTML = allUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('');
-            
-            const activeWalker = localStorage.getItem('dw_active_walker');
-            if (activeWalker && allUsers.some(u => u.name === activeWalker)) {
-                s.value = activeWalker;
-            } else if (currentVal && allUsers.some(u => u.name === currentVal)) {
-                s.value = currentVal;
-            } else {
-                s.value = currentUser?.name || "";
+        // CONTROL DE BOTONES CHIP (Paseadores Múltiples)
+        function updateWalkerOptions(selectedNames = []) {
+            const container = document.getElementById('walkersList');
+            if (!container) return;
+
+            // Si hay un paseo global activo y no estamos en modo manual de edición
+            if (globalActiveWalk && !isManualMode) {
+                container.innerHTML = `<div class="bg-sky-500 text-white font-bold text-xs px-4 py-2 rounded-full shadow-sm w-full text-center tracking-wide">${globalActiveWalk.walkers}</div>`;
+                return;
             }
+
+            // Generar botones para seleccionar
+            container.innerHTML = allUsers.map(u => `
+                <button type="button" data-name="${u.name}" class="walker-chip bg-white border border-sky-100 text-slate-500 font-bold text-[11px] px-4 py-2 rounded-full shadow-sm hover:bg-sky-50 transition-colors">
+                    ${u.name}
+                </button>
+            `).join('');
+
+            const chips = container.querySelectorAll('.walker-chip');
+            chips.forEach(chip => {
+                const name = chip.dataset.name;
+                
+                const toggleChip = () => {
+                    chip.classList.toggle('bg-sky-500');
+                    chip.classList.toggle('text-white');
+                    chip.classList.toggle('border-sky-500');
+                    chip.classList.toggle('bg-white');
+                    chip.classList.toggle('text-slate-500');
+                };
+
+                chip.onclick = toggleChip;
+                
+                // Auto-seleccionar si toca (modo edición o primer arranque)
+                if (selectedNames.length > 0) {
+                    if (selectedNames.includes(name)) toggleChip();
+                } else if (!isManualMode && name === currentUser?.name) {
+                    toggleChip(); // Seleccionar al usuario actual por defecto
+                }
+            });
         }
 
         function renderHistory() {
@@ -726,26 +968,37 @@
             
             list.innerHTML = allWalks.map(w => {
                 const period = getPeriod(w.start);
+                const hasRoute = w.route && w.route.length > 0;
+                
                 return `
-                <div class="card p-4 border-l-4 ${w.duration >= 30 ? 'border-sky-400' : 'border-sky-200'} bg-white mb-3">
+                <div class="card p-4 border-l-4 ${w.duration >= 30 ? 'border-sky-400' : 'border-sky-200'} bg-white mb-3 relative overflow-hidden">
                     <div class="flex justify-between items-start">
                         <div>
-                            <div class="flex items-center gap-2 mb-1">
-                                <p class="font-bold text-sky-900 text-base">${w.walker}</p>
-                                <span class="bg-sky-50 text-sky-600 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${period}</span>
+                            <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                <p class="font-bold text-sky-900 text-[13px] leading-tight">${w.walker}</p>
                             </div>
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">${w.date} · ${w.start} - ${w.end}</p>
-                            <p class="text-[9px] text-slate-300 font-medium mt-1">Registrado por: ${w.recordedBy || '?'}</p>
+                            <div class="flex gap-2 items-center mt-1.5">
+                                <span class="bg-sky-50 text-sky-600 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${period}</span>
+                                <span class="text-[9px] text-slate-300 font-medium">Reg: ${w.recordedBy || '?'}</span>
+                            </div>
                         </div>
-                        <div class="text-right">
+                        <div class="text-right pl-2">
                             <p class="text-xl font-black text-sky-600 leading-none font-timer">${w.duration}<span class="text-[9px] ml-0.5 opacity-50 uppercase font-black font-sans">min</span></p>
-                            ${currentUser.isAdmin ? `
-                                <div class="flex gap-2 mt-2 justify-end">
-                                    <button data-action="edit-walk" data-id="${w.id}" class="text-[9px] font-bold text-sky-400 border border-sky-100 px-2 py-1 rounded-lg uppercase bg-sky-50">Editar</button>
-                                    <button data-action="delete-walk" data-id="${w.id}" class="text-[9px] font-bold text-red-300 border border-red-50 px-2 py-1 rounded-lg uppercase bg-red-50">Borrar</button>
-                                </div>
-                            ` : ''}
                         </div>
+                    </div>
+                    
+                    <div class="flex gap-2 mt-3 justify-end items-center border-t border-slate-50 pt-3">
+                        ${hasRoute ? `
+                            <button data-action="show-map" data-id="${w.id}" class="text-[10px] font-bold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                                🗺️ Ver Ruta
+                            </button>
+                        ` : ''}
+                        
+                        ${currentUser.isAdmin ? `
+                            <button data-action="edit-walk" data-id="${w.id}" class="text-[10px] font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded-lg uppercase transition-colors">Editar</button>
+                            <button data-action="delete-walk" data-id="${w.id}" class="text-[10px] font-bold text-red-400 bg-red-50 hover:bg-red-100 px-2 py-1.5 rounded-lg uppercase transition-colors">Borrar</button>
+                        ` : ''}
                     </div>
                 </div>
             `}).join('');
@@ -775,8 +1028,9 @@
 
         function renderStats() {
             const names = allUsers.map(u => u.name);
-            const counts = names.map(n => allWalks.filter(w => w.walker === n).length);
-            const times = names.map(n => allWalks.filter(w => w.walker === n).reduce((a,b) => a + b.duration, 0));
+            // Separamos los nombres para contar correctamente a ambas personas si pasean juntas
+            const counts = names.map(n => allWalks.filter(w => w.walker.split(' + ').includes(n)).length);
+            const times = names.map(n => allWalks.filter(w => w.walker.split(' + ').includes(n)).reduce((a,b) => a + b.duration, 0));
             
             if (charts.w) charts.w.destroy();
             if (charts.t) charts.t.destroy();
